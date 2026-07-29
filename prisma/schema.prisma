@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----- MODELOS PARA NEXTAUTH (Autenticación) -----
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[] // Relación con las reservas
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ----- MODELOS PARA TU PELUQUERÍA (Reservas y Servicios) -----
+model Service {
+  id        String    @id @default(cuid())
+  name      String    // Ej: "Corte de pelo", "Barba", "Tinte"
+  price     Float     // Precio en euros
+  duration  Int       // Duración en minutos (ej: 30)
+  bookings  Booking[] @relation("ServiceBookings")
+}
+
+model Booking {
+  id              String   @id @default(cuid())
+  
+  // Cliente (si está logueado, se guarda userId; si no, se usan los campos de invitado)
+  userId          String?  // Relación con User (opcional)
+  guestName       String?  // Nombre del invitado
+  guestEmail      String?  // Email del invitado (para recordatorios)
+  
+  date            DateTime // Fecha y hora de la cita
+  totalPrice      Float    // Precio total de los servicios elegidos
+  durationMinutes Int      // Duración total en minutos
+  
+  // Estado de la reserva
+  status          String   @default("pending") // pending, deposit_paid, confirmed, cancelled, completed
+  
+  // Gestión del pago fraccionado con Stripe
+  depositAmount         Float    // Cantidad cobrada como depósito
+  depositPaid           Boolean  @default(false)
+  remainingAmount       Float    // Total - Depósito
+  stripePaymentIntentId String?  @unique // ID de Stripe para hacer tracking
+
+  // Relaciones
+  services        Service[] @relation("ServiceBookings")
+  user            User?     @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
