@@ -9,6 +9,7 @@ const adapter = new PrismaPg({connectionString: process.env.DATABASE_URL});
 const prisma = new PrismaClient({adapter});
 
 export const authOptions = {
+    secret: process.env.NEXTAUTH_SECRET,
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
