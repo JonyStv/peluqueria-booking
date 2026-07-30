@@ -23,12 +23,14 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "lucide-react": "^1.27.0",
+    "moment": "^2.30.1",
     "next": "16.2.12",
     "next-auth": "^4.24.15",
     "pg": "^8.22.0",
     "pg-cloudflare": "^1.4.0",
     "prisma": "^7.9.1",
     "react": "19.2.4",
+    "react-big-calendar": "^1.20.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
     "shadcn": "^4.16.0",
@@ -50,7 +52,7 @@
     "prisma@7.9.1": true,
     "@prisma/engines@7.9.1": true
   },
-    "overrides": {
+  "overrides": {
     "@emnapi/core": "2.0.0-alpha.3",
     "@emnapi/runtime": "2.0.0-alpha.3"
   }

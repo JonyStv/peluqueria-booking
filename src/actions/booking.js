@@ -54,3 +54,12 @@ export async function createBooking(formData) {
     remainingAmount,
   };
 }
+export async function updateBookingStatus(bookingId, newStatus) {
+  "use server";
+  const prisma = new PrismaClient();
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status: newStatus },
+  });
+  return { success: true };
+}
