@@ -62,6 +62,7 @@ model Service {
   price     Float     // Precio en euros
   duration  Int       // Duración en minutos (ej: 30)
   bookings  Booking[] @relation("ServiceBookings")
+  order     Int       @default(0) // Para ordenar los servicios en la UI
 }
 
 model Booking {
