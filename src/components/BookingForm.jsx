@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, ChevronRight } from "lucide-react";
+import { CalendarIcon, ChevronRight, X } from "lucide-react";
 
 // Componentes shadcn
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AlertDialog, AlertDialogDescription, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogDescription, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction } from "@/components/ui/alert-dialog";
 
 // Acciones del servidor
 import { createBooking } from "@/actions/booking";
@@ -84,12 +84,24 @@ export default function BookingForm({ services }) {
   const [error, setError] = useState(null);
   const [alertOpen, setAlertOpen] = useState(false);
 
-  // Horarios disponibles (9:00 a 20:00)
-  const timeSlots = [];
-  for (let i = 9; i <= 20; i++) {
-    timeSlots.push(`${i.toString().padStart(2, "0")}:00`);
-    if (i < 20) timeSlots.push(`${i.toString().padStart(2, "0")}:30`);
-  }
+  // Función que devuelve los slots horarios según el día de la semana
+  const getTimeSlotsForDate = (date) => {
+    if (!date) return [];
+
+    const dayOfWeek = date.getDay(); // 0 = domingo, 6 = sábado, 5 = viernes
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5;
+    const closeHour = isWeekend ? 19 : 21; // 19:00 fines de semana, 21:00 entre semana
+    const openHour = isWeekend ? 9 : 10; // 10:00 entre semana, 9:00 fines de semana
+
+    const slots = [];
+    for (let h = openHour; h < closeHour; h++) {
+      // Añadir la hora en punto
+      slots.push(`${h.toString().padStart(2, "0")}:00`);
+      slots.push(`${h.toString().padStart(2, "0")}:30`);
+    }
+    return slots;
+  };
+
 
   // Cálculos
   const selectedServicesData = services.filter((s) => selectedServices.includes(s.id));
@@ -127,10 +139,18 @@ export default function BookingForm({ services }) {
   // Verificar disponibilidad de un slot horario (para deshabilitar botones)
   const isTimeSlotAvailable = (timeStr) => {
     if (!selectedDate || totalDuration === 0) return false;
+
+    const dayOfWeek = selectedDate.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5;
+    const closeHour = isWeekend ? 19 : 21;
+    const openHour = isWeekend ? 9 : 10; // 10:00 entre semana, 9:00 fines de semana
+    const maxMinutes = closeHour * 60;
+
     const [hours, minutes] = timeStr.split(":").map(Number);
     const startMinutes = hours * 60 + minutes;
     const endMinutes = startMinutes + totalDuration;
-    if (startMinutes <= 539 || endMinutes >= 1231) return false;
+
+    if (startMinutes < openHour * 60 || endMinutes > maxMinutes) return false;
 
     for (const interval of occupiedIntervals) {
       if (startMinutes < interval.end && endMinutes > interval.start) {
@@ -139,7 +159,6 @@ export default function BookingForm({ services }) {
     }
     return true;
   };
-
   // Navegación entre pasos
   const goToNextStep = async () => {
     if (step === 1 && selectedServices.length === 0) {
@@ -228,194 +247,217 @@ export default function BookingForm({ services }) {
   };
 
   return (
-    <Card className="shadow-lg border-0">
-      <CardHeader>
-        <CardTitle className="text-2xl flex items-center gap-2">
-          <span className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm">
-            {step}
-          </span>
-          {step === 1 && "Elige tus servicios"}
-          {step === 2 && "Elige fecha y hora"}
-          {step === 3 && "Tus datos"}
-          {step === 4 && "Pago del depósito"}
-        </CardTitle>
-      </CardHeader>
+    <>
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="text-2xl flex items-center gap-2">
+            <span className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm">
+              {step}
+            </span>
+            {step === 1 && "Elige tus servicios"}
+            {step === 2 && "Elige fecha y hora"}
+            {step === 3 && "Tus datos"}
+            {step === 4 && "Pago del depósito"}
+          </CardTitle>
+        </CardHeader>
 
-      <CardContent>
-        {/* AlertDialog controlado */}
-        <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Error</AlertDialogTitle>
-            </AlertDialogHeader>
-            <AlertDialogDescription>{error}</AlertDialogDescription>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {step === 1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {services.map((service) => (
-                <div
-                  key={service.id}
-                  className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    selectedServices.includes(service.id)
+        <CardContent>
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {services.map((service) => (
+                  <div
+                    key={service.id}
+                    className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${selectedServices.includes(service.id)
                       ? "border-primary bg-primary/5"
                       : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSelectedServices((prev) =>
-                      prev.includes(service.id)
-                        ? prev.filter((id) => id !== service.id)
-                        : [...prev, service.id]
-                    );
-                  }}
-                >
-                  <Checkbox checked={selectedServices.includes(service.id)} onCheckedChange={() => {}} />
-                  <div className="flex-1">
-                    <Label className="cursor-pointer text-base font-medium">{service.name}</Label>
-                    <p className="text-sm text-gray-500">{service.duration} min</p>
-                  </div>
-                  <span className="font-bold text-primary">{service.price}€</span>
-                </div>
-              ))}
-            </div>
-            <div className="text-sm text-gray-500 mt-2">
-              Total servicios: <span className="font-semibold">{totalPrice}€</span>
-            </div>
-            <div className="text-sm text-gray-500">
-              Tiempo total estimado: <span className="font-semibold">{totalDuration} min</span>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row gap-6">
-              <div>
-                <Label className="mb-2 block">Fecha</Label>
-                <Popover>
-                  <PopoverTrigger
-                    className="w-full justify-start text-left font-normal inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                    onClick={() => {
+                      setSelectedServices((prev) =>
+                        prev.includes(service.id)
+                          ? prev.filter((id) => id !== service.id)
+                          : [...prev, service.id]
+                      );
+                    }}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>Elige una fecha</span>}
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      initialFocus
-                      locale={es}
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <Checkbox checked={selectedServices.includes(service.id)} onCheckedChange={() => { }} />
+                    <div className="flex-1">
+                      <Label className="cursor-pointer text-base font-medium">{service.name}</Label>
+                      <p className="text-sm text-gray-500">{service.duration} min</p>
+                    </div>
+                    <span className="font-bold text-primary">{service.price}€</span>
+                  </div>
+                ))}
               </div>
+              <div className="text-sm text-gray-500 mt-2">
+                Total servicios: <span className="font-semibold">{totalPrice}€</span>
+              </div>
+              <div className="text-sm text-gray-500">
+                Tiempo total estimado: <span className="font-semibold">{totalDuration} min</span>
+              </div>
+            </div>
+          )}
 
-              <div className="flex-1">
-                <Label className="mb-2 block">Hora</Label>
-                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                  {timeSlots.map((time) => {
-                    const available = isTimeSlotAvailable(time);
-                    return (
-                      <Button
-                        key={time}
-                        variant={selectedTime === time ? "default" : "outline"}
-                        className={`text-sm ${!available ? "opacity-50 cursor-not-allowed" : ""}`}
-                        disabled={!available}
-                        onClick={() => {
-                          if (available) setSelectedTime(time);
-                        }}
-                      >
-                        {time}
-                      </Button>
-                    );
-                  })}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row gap-6">
+                <div>
+                  <Label className="mb-2 block">Fecha</Label>
+                  <Popover>
+                    <PopoverTrigger
+                      className="w-full justify-start text-left font-normal inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>Elige una fecha</span>}
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        initialFocus
+                        locale={es}
+                        disabled={(date) => date < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex-1">
+                  <Label className="mb-2 block">Hora</Label>
+                  <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                    {getTimeSlotsForDate(selectedDate).map((time) => {
+                      const available = isTimeSlotAvailable(time);
+                      return (
+                        <Button
+                          key={time}
+                          variant={selectedTime === time ? "default" : "outline"}
+                          className={`text-sm ${!available ? "opacity-50 cursor-not-allowed" : ""}`}
+                          disabled={!available}
+                          onClick={() => {
+                            if (available) setSelectedTime(time);
+                          }}
+                        >
+                          {time}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre completo</Label>
-                <Input
-                  id="name"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Tu nombre"
-                />
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nombre completo</Label>
+                  <Input
+                    id="name"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Tu nombre"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="tucorreo@ejemplo.com"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={guestEmail}
-                  onChange={(e) => setGuestEmail(e.target.value)}
-                  placeholder="tucorreo@ejemplo.com"
-                />
+
+              <div className="bg-gray-50 p-4 rounded-lg space-y-1 text-sm">
+                <p>
+                  <span className="font-medium">Servicios:</span> {selectedServicesData.map((s) => s.name).join(", ")}
+                </p>
+                <p>
+                  <span className="font-medium">Cita:</span> {selectedDate && format(selectedDate, "PPP", { locale: es })} {selectedTime && `a las ${selectedTime}`}
+                </p>
+                <p>
+                  <span className="font-medium">Total:</span> {totalPrice}€
+                </p>
+                <p>
+                  <span className="font-medium">Duración:</span> {totalDuration} minutos
+                </p>
+                <p className="text-xs text-gray-400">
+                  Se cobrará un depósito del {depositPercentage}% ({depositAmount}€) para confirmar la reserva. El resto ({remainingAmount}€) se paga en el local.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Se permite un margen de 15 minutos de retraso. Si no se presenta, la reserva se cancelará y el depósito no será reembolsado.
+                </p>
               </div>
             </div>
+          )}
 
-            <div className="bg-gray-50 p-4 rounded-lg space-y-1 text-sm">
-              <p>
-                <span className="font-medium">Servicios:</span> {selectedServicesData.map((s) => s.name).join(", ")}
-              </p>
-              <p>
-                <span className="font-medium">Cita:</span> {selectedDate && format(selectedDate, "PPP", { locale: es })} {selectedTime && `a las ${selectedTime}`}
-              </p>
-              <p>
-                <span className="font-medium">Total:</span> {totalPrice}€
-              </p>
-              <p className="text-xs text-gray-400">
-                Se cobrará un depósito del {depositPercentage}% ({depositAmount}€) para confirmar la reserva. El resto ({remainingAmount}€) se paga en el local.
-              </p>
+          {step === 4 && clientSecret && (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-green-700 text-sm">
+                ✅ Reserva creada correctamente. Procede al pago del depósito.
+              </div>
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <CheckoutForm
+                  bookingId={bookingId}
+                  onSuccess={() => (window.location.href = "/gracias")}
+                  onError={(msg) => {
+                    setError(msg);
+                    setAlertOpen(true);
+                  }}
+                />
+              </Elements>
             </div>
-          </div>
-        )}
+          )}
+        </CardContent>
 
-        {step === 4 && clientSecret && (
-          <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-green-700 text-sm">
-              ✅ Reserva creada correctamente. Procede al pago del depósito.
-            </div>
-            <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <CheckoutForm
-                bookingId={bookingId}
-                onSuccess={() => (window.location.href = "/gracias")}
-                onError={(msg) => {
-                  setError(msg);
-                  setAlertOpen(true);
-                }}
-              />
-            </Elements>
-          </div>
-        )}
-      </CardContent>
+        <CardFooter className="flex justify-between border-t pt-6">
+          {step > 1 && (
+            <Button variant="outline" onClick={goToPreviousStep} disabled={isLoading}>
+              Atrás
+            </Button>
+          )}
+          {step < 3 && (
+            <Button onClick={goToNextStep} className="ml-auto" disabled={isLoading}>
+              {isLoading ? "Verificando..." : "Siguiente"} <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          )}
+          {step === 3 && (
+            <Button onClick={handleFinalizeBooking} className="ml-auto" disabled={isLoading}>
+              {isLoading ? "Procesando..." : `Pagar depósito (${depositAmount}€)`}
+            </Button>
+          )}
+        </CardFooter>
+      </Card>
 
-      <CardFooter className="flex justify-between border-t pt-6">
-        {step > 1 && (
-          <Button variant="outline" onClick={goToPreviousStep} disabled={isLoading}>
-            Atrás
-          </Button>
-        )}
-        {step < 3 && (
-          <Button onClick={goToNextStep} className="ml-auto" disabled={isLoading}>
-            {isLoading ? "Verificando..." : "Siguiente"} <ChevronRight className="ml-1 h-4 w-4" />
-          </Button>
-        )}
-        {step === 3 && (
-          <Button onClick={handleFinalizeBooking} className="ml-auto" disabled={isLoading}>
-            {isLoading ? "Procesando..." : `Pagar depósito (${depositAmount}€)`}
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+      {/* AlertDialog fuera del Card para que se centre correctamente */}
+      <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
+        <AlertDialogContent className="relative fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%]">
+          {/* Botón de cierre en la esquina superior derecha */}
+          <button
+            onClick={() => setAlertOpen(false)}
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Cerrar</span>
+          </button>
+
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-semibold">Error</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogDescription className="text-sm text-gray-500">
+            {error}
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertOpen(false)}>
+              Aceptar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

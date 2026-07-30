@@ -40,24 +40,27 @@ export async function getOccupiedIntervals(dateString) {
  * @param {number} duration - Duración en minutos
  * @returns {Promise<{available: boolean, conflicts?: Array}>}
  */
-export async function checkAvailability(dateString, time, duration) {
-  const [hours, minutes] = time.split(":").map(Number);
+export async function checkAvailability(dateStr, timeStr, duration) {
+  const date = new Date(dateStr + "T00:00:00");
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5; // 0=domingo, 6=sábado, 5=viernes
+  const closeHour = isWeekend ? 19 : 21;
+  const openHour = isWeekend ? 9 : 10; // 10:00 entre semana, 9:00 fines de semana
+  const maxMinutes = closeHour * 60;
+
+  const intervals = await getOccupiedIntervals(dateStr);
+  const [hours, minutes] = timeStr.split(":").map(Number);
   const startMinutes = hours * 60 + minutes;
   const endMinutes = startMinutes + duration;
 
-  // Horario de apertura: 9:00 (540 min), cierre: 20:30 (1230 min)
-  if (startMinutes < 540 || endMinutes > 1230) { //Posibilidad de limitar el horario de la ultima reserva
-    return { available: false, reason: "Fuera del horario de atención (9:00 - 20:30)" };
+  if (startMinutes < openHour * 60 || endMinutes > maxMinutes) {
+    return { available: false, message: "La franja horaria está fuera del horario de atención." };
   }
 
-  const intervals = await getOccupiedIntervals(dateString);
-  const conflicts = intervals.filter(
-    (interval) => startMinutes < interval.end && endMinutes > interval.start
-  );
-
-  if (conflicts.length > 0) {
-    return { available: false, conflicts };
+  for (const interval of intervals) {
+    if (startMinutes < interval.end && endMinutes > interval.start) {
+      return { available: false, message: "La franja horaria ya está ocupada." };
+    }
   }
-
   return { available: true };
 }
