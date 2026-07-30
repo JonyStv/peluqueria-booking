@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import AdminDashboard from "@/components/AdminDashboard";
 
+export const dynamic = "force-dynamic"; // Forzar renderizado dinámico para obtener datos actualizados
 export default async function AdminPage() {
   //console.log(auth());
   //const session = await auth();
@@ -23,7 +24,7 @@ export default async function AdminPage() {
 
   // Obtener servicios para el CRUD
   const services = await prisma.service.findMany({
-    orderBy: { name: "asc" },
+    orderBy: { order: "asc" },
   });
 
   // Serializar fechas
